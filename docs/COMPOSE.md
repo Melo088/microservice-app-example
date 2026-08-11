@@ -4,7 +4,36 @@
 
 `docker-compose.yml` orquesta los cinco servicios de la aplicación (`frontend`, `auth-api`, `todos-api`, `users-api`, `log-message-processor`), la cola de eventos (`redis-queue`) y el componente de trazado distribuido (`zipkin`).
 
-## 2. Componentes del archivo
+## 2. Diagrama de arquitectura de contenedores
+
+El diagrama de `/arch-img/Microservices.png` es la arquitectura *lógica* de la app (qué servicio le habla a cuál). Este otro es la vista de *despliegue*: contenedores, red de Docker, qué puerto queda publicado al host, y qué tan real es el `HEALTHCHECK` de cada uno (ver `docs/DOCKER.md` sección 3 para el detalle del patrón Health Endpoint Monitoring). Las flechas son las relaciones `depends_on` de `docker-compose.yml`, es decir, el orden real en el que Compose arranca los contenedores.
+
+```mermaid
+graph TB
+    subgraph net["Red de Docker: microservice-app-example_default"]
+        fe["frontend :8080→host<br/>healthcheck real (GET /)"]
+        au["auth-api :8081→host<br/>healthcheck real (GET /version)"]
+        us["users-api :8083→host<br/>healthcheck aproximado"]
+        to["todos-api :8082→host<br/>healthcheck aproximado"]
+        lp["log-message-processor<br/>sin puerto, sin healthcheck"]
+        rq["redis-queue :6379 (solo interno)<br/>healthcheck: redis-cli ping"]
+        zk["zipkin :9411→host<br/>healthcheck propio de la imagen"]
+    end
+
+    fe -->|"depends_on: healthy"| au
+    fe -->|"depends_on: healthy"| to
+    fe -.->|"depends_on: started"| zk
+    au -->|"depends_on: healthy"| us
+    au -.->|"depends_on: started"| zk
+    to -->|"depends_on: healthy"| rq
+    to -.->|"depends_on: started"| zk
+    us -.->|"depends_on: started"| zk
+    lp -->|"depends_on: healthy"| rq
+```
+
+`frontend` es el último en poder arrancar: depende (transitivamente) de que `auth-api`, `todos-api`, `users-api` y `redis-queue` ya estén sanos. `log-message-processor` solo depende de `redis-queue`, es el único que no expone HTTP.
+
+## 3. Componentes del archivo
 
 ### `depends_on` con `condition:` (forma larga)
 
@@ -35,11 +64,11 @@ La sintaxis `${VAR}` toma el valor de la variable desde el archivo `.env`. El op
 
 Ningún proceso fuera de la red de Docker necesita conectarse directamente a Redis; únicamente lo hacen `todos-api` y `log-message-processor`, que lo alcanzan por la red interna de Compose sin necesidad de exponerlo al host. La ausencia de bloque `ports:` en este servicio es intencional, no una omisión. `zipkin`, en cambio, sí publica su puerto (`9411`), ya que su interfaz está pensada para consultarse desde el navegador.
 
-## 3. Zipkin: dos formatos de URL
+## 4. Zipkin: dos formatos de URL
 
 `log-message-processor` envía trazas a `/api/v1/spans`, mientras que los otros tres servicios instrumentados usan `/api/v2/spans`. Se verificó en el código fuente (`log-message-processor/main.py`) que ese servicio codifica los datos con `Content-Type: application/x-thrift` (formato binario Thrift), que corresponde al endpoint v1 de Zipkin. Los demás servicios usan clientes de Zipkin que codifican en JSON, correspondiente al endpoint v2. Son dos formatos de transporte distintos hacia el mismo Zipkin, cada uno dirigido a la ruta que le corresponde.
 
-## 4. Punto de incertidumbre: `SPRING_ZIPKIN_BASE_URL`
+## 5. `SPRING_ZIPKIN_BASE_URL`
 
 La propiedad real en `users-api` es `spring.zipkin.baseUrl` (confirmada en `application.properties`). El nombre de variable de entorno que la sobrescribe depende de las reglas de "relaxed binding" de Spring, cuyo comportamiento en el límite exacto entre palabras en camelCase (`base` + `Url`) ha sido inconsistente históricamente entre versiones, particularmente en líneas antiguas de Spring Boot como la 1.5.6 usada en este proyecto. No fue posible confirmar el comportamiento exacto sin ejecutar la aplicación con una JVM disponible.
 
@@ -55,7 +84,7 @@ JAVA_TOOL_OPTIONS: -Dspring.zipkin.baseUrl=http://zipkin:9411
 
 Este punto no afecta el funcionamiento principal de la aplicación: `users-api` opera igual con o sin trazado hacia Zipkin. Se trata de una mejora de observabilidad, no de una dependencia crítica del sistema.
 
-## 5. Verificación del sistema
+## 6. Verificación del sistema
 
 ```bash
 docker compose up --build
@@ -79,7 +108,7 @@ docker compose up --build
 
    Debe mostrarse el mensaje publicado por `todos-api` al crear o eliminar el todo.
 
-4. **Trazado distribuido (opcional).** Consultar `http://localhost:9411` y buscar trazas por `serviceName`. Ver sección 4 en caso de que `users-api` no aparezca.
+4. **Trazado distribuido (opcional).** Consultar `http://localhost:9411` y buscar trazas por `serviceName`. Ver sección 5 en caso de que `users-api` no aparezca.
 
 5. **Prueba de resiliencia.** Esta prueba ilustra en la práctica el patrón Health Endpoint Monitoring:
 
@@ -96,8 +125,8 @@ docker compose up --build
 
    y esperar a que su estado vuelva a `(healthy)` antes de intentar un nuevo inicio de sesión.
 
-## 6. Problemas frecuentes
+## 7. Problemas frecuentes
 
 - **Puerto ocupado** (`8080`–`8083`, `9411`): modificar el número a la izquierda en el bloque `ports:` del servicio correspondiente.
-- **`auth-api` o `todos-api` no alcanzan el estado "healthy"**: revisar si `users-api` o `redis-queue`, según corresponda, alcanzaron "healthy" primero — `depends_on` con `condition` los bloquea deliberadamente hasta que eso ocurra.
+- **`auth-api` o `todos-api` no alcanzan el estado "healthy"**: revisar si `users-api` o `redis-queue`, según corresponda, alcanzaron "healthy" primero pues `depends_on` con `condition` los bloquea deliberadamente hasta que eso ocurra.
 - **"Invalid token" al iniciar sesión**: verificar que `JWT_SECRET` sea idéntico en `auth-api`, `todos-api` y `users-api`. Con el valor por defecto `${JWT_SECRET:-myfancysecret}` de este archivo, esto ocurre automáticamente mientras no se defina un `JWT_SECRET` distinto en algún servicio.
