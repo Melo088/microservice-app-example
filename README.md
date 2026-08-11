@@ -17,6 +17,8 @@ Con todo arriba: frontend en `http://localhost:8080` (login `admin`/`admin`), Zi
 Documentación completa:
 - [`docs/DOCKER.md`](docs/DOCKER.md): qué imagen base se eligió para cada servicio y por qué, y cómo quedó implementado el patrón *Health Endpoint Monitoring*.
 - [`docs/COMPOSE.md`](docs/COMPOSE.md): cómo está armado `docker-compose.yml`, y el paso a paso completo para verificar que todo funciona (incluyendo el pipeline `todos-api → Redis → log-message-processor`, un ejemplo del patrón *Pipes and Filters*).
+- [`docs/SHOWCASE.md`](docs/SHOWCASE.md): capturas del sistema corriendo.
+- [`docs/CI-CD.md`](docs/CI-CD.md): cómo funcionan los workflows de GitHub Actions que publican cada imagen a Docker Hub.
 
 ## Components
 In each folder you can find a more in-depth explanation of each component:
