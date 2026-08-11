@@ -45,13 +45,7 @@ workflow_dispatch: {}
 
 Esto agrega un botón "Run workflow" en la pestaña Actions de GitHub para dispararlo a mano. **Limitación:** ese botón, y el workflow en general, solo aparecen en la pestaña Actions una vez que el archivo del workflow existe en la rama por defecto (`master`). Un workflow que solo vive en una rama de feature todavía no mergeada no es visible ahí, así que `workflow_dispatch` no sirve para probar un workflow completamente nuevo antes del primer merge.
 
-La forma de probarlo antes de mergear es agregar temporalmente la rama de feature al trigger `push`:
-
-```yaml
-branches: [master, feature/ci-cd]  # sacar antes de mergear
-```
-
-Con eso, pushear a esa rama dispara el workflow. Una vez confirmado que corre bien, se saca la rama de la lista antes de abrir el PR, dejando `branches: [master]` como en producción.
+La forma de probarlo antes de mergear es agregar temporalmente la rama de feature al trigger `push` (`branches: [master, feature/ci-cd]`), pushear, confirmar en la pestaña Actions que corre bien, y sacar la rama de la lista antes de abrir el PR, dejando `branches: [master]` como quedó en la versión final. Así se probó cada uno de estos cinco workflows antes de este PR.
 
 ## 6. Cache de build
 

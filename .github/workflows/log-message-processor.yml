@@ -2,7 +2,7 @@ name: Build and Push - log-message-processor
 
 on:
   push:
-    branches: [master, feature/ci-cd]  # TEMPORAL: sacar antes de mergear (ver docs/CI-CD.md seccion 5)
+    branches: [master]
     paths:
       - "log-message-processor/**"
       - ".github/workflows/log-message-processor.yml"

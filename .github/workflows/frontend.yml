@@ -2,7 +2,7 @@ name: Build and Push - frontend
 
 on:
   push:
-    branches: [master, feature/ci-cd]  # TEMPORAL: sacar antes de mergear (ver docs/CI-CD.md seccion 5)
+    branches: [master]
     paths:
       - "frontend/**"
       - ".github/workflows/frontend.yml"
