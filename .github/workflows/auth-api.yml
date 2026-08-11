@@ -2,7 +2,7 @@ name: Build and Push - auth-api
 
 on:
   push:
-    branches: [master]
+    branches: [master, feature/ci-cd]  # TEMPORAL: sacar antes de mergear (ver docs/CI-CD.md seccion 5)
     paths:
       - "auth-api/**"
       - ".github/workflows/auth-api.yml"

@@ -35,7 +35,7 @@ tags: |
 
 `latest` sirve para desarrollo local rápido (`docker pull ... :latest`, siempre la última versión). El hash corto del commit (calculado con `git rev-parse --short HEAD` en el paso `Set short SHA`) da trazabilidad pues se puede saber exactamente qué commit generó una imagen en particular, y fijar un despliegue a esa versión específica en vez de a `latest`. Esto importa para cuando estas imágenes se referencien desde manifiestos de Kubernetes o desde un `docker-compose.prod.yml`.
 
-## 5. `workflow_dispatch`: probar antes de mergear
+## 5. Probar antes de mergear
 
 El trigger `push` solo dispara en `master`. Como el flujo de trabajo de este repo es por rama de feature, eso significa que un workflow nuevo no corre ni una vez hasta que su propia rama se mergea, momento en el que ya es tarde para corregir un error de sintaxis o de configuración sin otro commit. Por eso los cinco workflows también tienen:
 
@@ -43,7 +43,15 @@ El trigger `push` solo dispara en `master`. Como el flujo de trabajo de este rep
 workflow_dispatch: {}
 ```
 
-Esto agrega un botón "Run workflow" en la pestaña Actions de GitHub, que permite dispararlo a mano sobre cualquier rama, incluida la que todavía no se mergeó. Es la forma de probar un workflow antes de confiarle un merge a master.
+Esto agrega un botón "Run workflow" en la pestaña Actions de GitHub para dispararlo a mano. **Limitación:** ese botón, y el workflow en general, solo aparecen en la pestaña Actions una vez que el archivo del workflow existe en la rama por defecto (`master`). Un workflow que solo vive en una rama de feature todavía no mergeada no es visible ahí, así que `workflow_dispatch` no sirve para probar un workflow completamente nuevo antes del primer merge.
+
+La forma de probarlo antes de mergear es agregar temporalmente la rama de feature al trigger `push`:
+
+```yaml
+branches: [master, feature/ci-cd]  # sacar antes de mergear
+```
+
+Con eso, pushear a esa rama dispara el workflow. Una vez confirmado que corre bien, se saca la rama de la lista antes de abrir el PR, dejando `branches: [master]` como en producción.
 
 ## 6. Cache de build
 
