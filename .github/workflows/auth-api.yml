@@ -1,6 +1,6 @@
 name: Build and Push - auth-api
 
-# workflow_dispatch permite dispararlo a mano desde la pestaña Actions.
+on:
   push:
     branches: [master]
     paths:
