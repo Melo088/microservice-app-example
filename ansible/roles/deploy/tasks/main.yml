@@ -1,0 +1,45 @@
+---
+# Copia docker-compose.prod.yml (no docker-compose.yml: ese usa build:, y
+# esta VM no tiene el codigo fuente, solo las imagenes ya publicadas en
+# Docker Hub por CI/CD, ver docs/CI-CD.md y docs/ANSIBLE.md) y lo levanta.
+
+- name: Crear el directorio de la aplicacion
+  ansible.builtin.file:
+    path: "{{ app_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Copiar docker-compose.prod.yml como docker-compose.yml remoto
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../docker-compose.prod.yml"
+    dest: "{{ app_dir }}/docker-compose.yml"
+    mode: "0644"
+
+- name: Generar el archivo .env con los secretos y el tag de imagen
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ app_dir }}/.env"
+    mode: "0600"
+
+- name: Descargar las imagenes publicadas por CI/CD
+  ansible.builtin.command:
+    cmd: docker compose pull
+    chdir: "{{ app_dir }}"
+  changed_when: true
+
+- name: Levantar el stack
+  ansible.builtin.command:
+    cmd: docker compose up -d
+    chdir: "{{ app_dir }}"
+  changed_when: true
+
+- name: Leer el estado final de los contenedores
+  ansible.builtin.command:
+    cmd: docker compose ps
+    chdir: "{{ app_dir }}"
+  changed_when: false
+  register: compose_ps
+
+- name: Mostrar el estado final de los contenedores
+  ansible.builtin.debug:
+    var: compose_ps.stdout_lines

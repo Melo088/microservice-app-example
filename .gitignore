@@ -8,3 +8,7 @@ terraform/crash.log
 terraform/*.tfvars
 !terraform/*.tfvars.example
 terraform/tfplan*
+
+# Ansible
+ansible/inventory.ini
+ansible/*.retry
