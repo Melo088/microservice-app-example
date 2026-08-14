@@ -32,6 +32,11 @@ public class JwtAuthenticationFilter extends GenericFilterBean {
             response.setStatus(HttpServletResponse.SC_OK);
 
             chain.doFilter(req, res);
+        } else if ("/health".equals(request.getRequestURI())) {
+            // Real health endpoint, used by the Docker HEALTHCHECK. It must stay
+            // reachable without a JWT, so it is let through before the
+            // Authorization header check below.
+            chain.doFilter(req, res);
         } else {
 
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
