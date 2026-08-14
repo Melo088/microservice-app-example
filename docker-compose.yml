@@ -78,6 +78,13 @@ services:
       REDIS_PORT: 6379
       REDIS_CHANNEL: log_channel
       ZIPKIN_URL: http://zipkin:9411/api/v1/spans
+      LOG_PERSIST_PATH: /data/processed.log
+      # Ambas vacías por defecto: sin ellas, el filtro notify solo registra
+      # el error por log en vez de enviar un correo (ver docs/DOCKER.md sección 5).
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      SENDGRID_TO: ${SENDGRID_TO:-}
+    volumes:
+      - log-data:/data
     depends_on:
       redis-queue:
         condition: service_healthy
@@ -94,3 +101,6 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+
+volumes:
+  log-data:

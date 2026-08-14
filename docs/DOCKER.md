@@ -103,5 +103,23 @@ En `todos-api`, sí hay una dependencia externa real: Redis. Sin embargo, los da
 
 1. **`redis==2.10.6` en `log-message-processor`** debería actualizarse a una versión que no dependa de `distutils`.
 2. **`frontend` corre su servidor de desarrollo en la imagen "de producción".** La solución real es `npm run build` + nginx con un `nginx.conf` que replique el `proxyTable` de `config/index.js`.
-3. **`todos-api` reporta `/health` como liveness únicamente.** No verifica la conexión a Redis, así que una caída de Redis no queda reflejada ahí, aunque sí afecta la publicación de eventos hacia `log-message-processor`. El momento natural para revisar esto es al extender `log-message-processor` con el patrón Pipes and Filters, cuando ese mismo canal de Redis vuelve a tocarse.
+3. **`todos-api` reporta `/health` como liveness únicamente.** No verifica la conexión a Redis, así que una caída de Redis no queda reflejada ahí, aunque sí afecta la publicación de eventos hacia `log-message-processor`.
+
+
+## 5. Patrón Pipes and Filters
+
+`log-message-processor` recibe cada mensaje de `todos-api` a través del canal `log_channel` de Redis. Ese canal es el pipe externo del patrón y no cambió: `todos-api` sigue publicando sin saber quién escucha del otro lado, y sin esperar respuesta. Lo que se agregó es la cadena interna de filtros que procesa cada mensaje una vez que llega, en `log-message-processor/filters.py`.
+
+| Filtro | Responsabilidad |
+|---|---|
+| `validate` | Descarta mensajes de control del protocolo pubsub de Redis (por ejemplo, la confirmación de suscripción) y mensajes cuyo payload no es JSON válido o no trae los campos `opName`, `username`, `todoId`. |
+| `enrich` | Agrega `processed_at` y `processed_by` al mensaje. |
+| `persist` | Escribe el mensaje como una línea JSON en `LOG_PERSIST_PATH` (`/data/processed.log` por defecto), montado como el volumen `log-data` en `docker-compose.yml` para que sobreviva a un restart del contenedor. |
+| `notify_error` | Se invoca únicamente cuando `enrich` o `persist` lanzan una excepción, no cuando `validate` descarta un mensaje de forma normal. Envía un correo a través de la API HTTP de SendGrid. Con `SENDGRID_API_KEY` o `SENDGRID_TO` sin definir, solo registra el error por log. |
+
+`log-message-processor/main.py` recorre `filters.FILTERS` en orden y detiene la cadena apenas un filtro devuelve `None` o lanza una excepción, delegando en ese segundo caso a `notify_error`. Agregar, quitar o reordenar un filtro no requiere modificar `main.py` más allá de esa lista.
+
+`validate` se ejecuta por separado en `main.py`, antes que el resto de la cadena, porque el campo `zipkinSpan` (que indica si el mensaje debe continuar el trace distribuido iniciado por `todos-api`) solo existe una vez que el mensaje ya fue parseado como JSON. `enrich` y `persist` sí corren siempre dentro del `zipkin_span` cuando corresponde, de la misma forma en que antes ese span envolvía a `log_message()`.
+
+SendGrid queda como opcional a propósito: el pipeline no debe depender de una cuenta configurada para funcionar en desarrollo local o en CI.
 
