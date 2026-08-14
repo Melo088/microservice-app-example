@@ -32,11 +32,11 @@ El healthcheck usa `/version`, la única ruta de este servicio que responde sin 
 |---|---|
 | Build y runtime | `node:20-alpine` |
 | Puerto | `TODO_API_PORT` (default 8082 en el código) |
-| Healthcheck | responde 401 en `/todos` sin token. Se usa como proxy, sin `-f` |
+| Healthcheck | `GET /health` → 200 real |
 
 `npm ci --omit=dev` en vez de `npm ci`: el script `"start"` de `package.json` corre `nodemon`, que vive en `devDependencies`. `nodemon` reinicia el proceso cuando detecta cambios en archivos. Lo cual es útil en desarrollo, pero no tiene tanto sentido dentro de un contenedor (el código no cambia en caliente). Por eso la imagen final arranca con `node server.js` directo, y `nodemon` ni siquiera se instala.
 
-Este servicio **no tiene una ruta `/health` real** en el código. El middleware de JWT (`app.use(jwt(...))`) se aplica globalmente antes de las rutas, así que cualquier petición sin token, incluida una a `/todos`, devuelve `401`. Ese `401` no es un endpoint de salud diseñado a propósito, pero sí prueba que el proceso Node y su servidor HTTP están vivos y respondiendo. El healthcheck llama `curl` **sin** `-f` a propósito para que es  `401` no cuente como fallo
+Este servicio tiene una ruta `GET /health` real, registrada en `server.js` antes del middleware de JWT (`app.use(jwt(...))`), que se aplica globalmente a todas las rutas definidas después de él. Por eso `/health` responde 200 sin necesitar un token, y el healthcheck usa `curl -f`, igual que en `auth-api` y `frontend`.
 
 ### users-api (Java / Spring Boot 1.5.6)
 
@@ -45,11 +45,11 @@ Este servicio **no tiene una ruta `/health` real** en el código. El middleware 
 | Build | `maven:3.9-eclipse-temurin-8` |
 | Runtime | `eclipse-temurin:8-jre-alpine` |
 | Puerto | `SERVER_PORT` (default 8083 en `application.properties`) |
-| Healthcheck | responde 401 en `/users/` sin token. Mismo proxy que todos-api |
+| Healthcheck | `GET /health` → 200 real |
 
 Fijado a Java 8 a propósito: esta combinación de Spring Boot 1.5.6 + `jjwt` 0.7.0 + `spring-cloud-starter-zipkin` 1.3.1 es anterior a varios cambios importantes en versiones modernas de Spring/JDK. Se usa el mismo target que el propio README documenta ("Java openJDK8").
 
-El proyecto no trae `spring-boot-starter-actuator`, así que no existe un `/actuator/health`. Mismo caso que `todos-api`: se usa la respuesta (aunque sea `401`) como evidencia de que el servidor HTTP está arriba, sin `-f` en `curl` por la misma razón. `--start-period=30s` es más largo que en los demás servicios porque Spring Boot tarda en inicializar el contexto de la aplicación.
+El proyecto no trae `spring-boot-starter-actuator`, así que no existe un `/actuator/health`. En su lugar se agregó un `HealthController` propio, mapeado a `GET /health`, que responde 200 con un cuerpo `{"status":"UP"}`. `JwtAuthenticationFilter` deja pasar las peticiones a esa ruta antes de exigir el header `Authorization`, de la misma forma en que ya dejaba pasar las peticiones `OPTIONS`. Con eso el healthcheck usa `curl -f`, igual que en `auth-api`, `frontend` y `todos-api`. `--start-period=30s` es más largo que en los demás servicios porque Spring Boot tarda en inicializar el contexto de la aplicación.
 
 ### log-message-processor (Python)
 
@@ -88,14 +88,20 @@ Fijado a `node:8-alpine` (no `node:20` como los demás) porque este toolchain es
 |---|---|---|
 | auth-api | Sí (`GET /version`, sin auth) | Chequeo real, `curl -f` |
 | frontend | Sí (`GET /`, sirve la SPA) | Chequeo real, `curl -f` |
-| todos-api | No | Proxy: cualquier respuesta HTTP (incluso 401), sin `-f` |
-| users-api | No | Proxy: cualquier respuesta HTTP (incluso 401), sin `-f` |
+| todos-api | Sí (`GET /health`, sin auth) | Chequeo real, `curl -f` |
+| users-api | Sí (`GET /health`, sin auth) | Chequeo real, `curl -f` |
 | log-message-processor | No aplica (sin puerto) | Ninguno |
+
+Los cuatro healthchecks marcados como reales en esta tabla verifican liveness (que el proceso sigue vivo y su servidor HTTP responde), no readiness (que el servicio está en condiciones de atender tráfico con todas sus dependencias externas disponibles). La distinción no pesa igual en cada servicio.
+
+En `users-api`, la base de datos es H2 en memoria, sin datasource externo configurado. No existe un estado intermedio en el que el proceso esté vivo pero alguna dependencia esté caída, así que liveness y readiness coinciden en la práctica.
+
+En `todos-api`, sí hay una dependencia externa real: Redis. Sin embargo, los datos de los todos se guardan en un `memory-cache` dentro del proceso (`todoController.js`), no en Redis. Redis solo se usa para publicar en `log_channel`, el canal que alimenta a `log-message-processor`. Si Redis se cae, las operaciones sobre `/todos` siguen funcionando, pero esa publicación falla en silencio y `/health` no lo refleja. Esta brecha queda identificada como pendiente (ver sección 4).
 
 
 ## 4. Pendientes
 
 1. **`redis==2.10.6` en `log-message-processor`** debería actualizarse a una versión que no dependa de `distutils`.
 2. **`frontend` corre su servidor de desarrollo en la imagen "de producción".** La solución real es `npm run build` + nginx con un `nginx.conf` que replique el `proxyTable` de `config/index.js`.
-3. **`todos-api` y `users-api` no tienen un endpoint `/health` real.**
+3. **`todos-api` reporta `/health` como liveness únicamente.** No verifica la conexión a Redis, así que una caída de Redis no queda reflejada ahí, aunque sí afecta la publicación de eventos hacia `log-message-processor`. El momento natural para revisar esto es al extender `log-message-processor` con el patrón Pipes and Filters, cuando ese mismo canal de Redis vuelve a tocarse.
 

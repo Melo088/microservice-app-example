@@ -34,6 +34,12 @@ const jwtSecret = process.env.JWT_SECRET || "foo"
 
 const app = express()
 
+// Registered before the jwt middleware below so it never requires a token.
+// This is the real health endpoint used by the Docker HEALTHCHECK.
+app.get('/health', function (req, res) {
+  res.status(200).json({ status: 'UP' })
+})
+
 // tracing
 const ctxImpl = new CLSContext('zipkin');
 const recorder = new  BatchRecorder({

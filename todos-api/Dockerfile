@@ -13,5 +13,5 @@ COPY package.json server.js routes.js todoController.js ./
 USER node
 EXPOSE 8082
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -s -o /dev/null "http://localhost:${TODO_API_PORT:-8082}/todos" || exit 1
+  CMD curl -f "http://localhost:${TODO_API_PORT:-8082}/health" || exit 1
 CMD ["node", "server.js"]
