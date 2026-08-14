@@ -11,8 +11,8 @@ FROM python:3.11-slim
 RUN useradd --create-home --shell /usr/sbin/nologin app
 WORKDIR /app
 COPY --from=builder /root/.local /home/app/.local
-COPY main.py .
-RUN chown -R app:app /home/app/.local
+COPY main.py filters.py .
+RUN mkdir -p /data && chown -R app:app /home/app/.local /data
 USER app
 ENV PATH=/home/app/.local/bin:$PATH \
     PYTHONUNBUFFERED=1

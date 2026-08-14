@@ -64,6 +64,10 @@ La sintaxis `${VAR}` toma el valor de la variable desde el archivo `.env`. El op
 
 Ningún proceso fuera de la red de Docker necesita conectarse directamente a Redis; únicamente lo hacen `todos-api` y `log-message-processor`, que lo alcanzan por la red interna de Compose sin necesidad de exponerlo al host. La ausencia de bloque `ports:` en este servicio es intencional, no una omisión. `zipkin`, en cambio, sí publica su puerto (`9411`), ya que su interfaz está pensada para consultarse desde el navegador.
 
+### `log-data`: volumen para el filtro `persist`
+
+El filtro `persist` de `log-message-processor` (ver `docs/DOCKER.md` sección 5) escribe cada mensaje procesado en `/data/processed.log`, dentro del contenedor. Sin un volumen, ese archivo viviría en la capa de escritura del contenedor y se perdería al recrearlo. El volumen con nombre `log-data`, declarado al final de este archivo y montado en `log-message-processor` como `log-data:/data`, hace que el archivo sobreviva a un `docker compose down` seguido de `docker compose up`, mientras el volumen no se borre explícitamente con `docker compose down -v`.
+
 ## 4. Zipkin: dos formatos de URL
 
 `log-message-processor` envía trazas a `/api/v1/spans`, mientras que los otros tres servicios instrumentados usan `/api/v2/spans`. Se verificó en el código fuente (`log-message-processor/main.py`) que ese servicio codifica los datos con `Content-Type: application/x-thrift` (formato binario Thrift), que corresponde al endpoint v1 de Zipkin. Los demás servicios usan clientes de Zipkin que codifican en JSON, correspondiente al endpoint v2. Son dos formatos de transporte distintos hacia el mismo Zipkin, cada uno dirigido a la ruta que le corresponde.
