@@ -1,0 +1,12 @@
+---
+app_dir: /opt/microservice-app-example
+
+# Sobreescribir estos tres con -e en la linea de comandos o en un archivo de
+# vars propio (no versionado). Ver docs/ANSIBLE.md.
+jwt_secret: myfancysecret
+sendgrid_api_key: ""
+sendgrid_to: ""
+
+# Tag de imagen a desplegar. "latest" es la ultima construida por CI/CD en
+# master; un hash corto de commit (ver docs/CI-CD.md) fija una version exacta.
+image_tag: latest

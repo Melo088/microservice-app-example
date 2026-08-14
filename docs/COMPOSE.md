@@ -4,6 +4,8 @@
 
 `docker-compose.yml` orquesta los cinco servicios de la aplicación (`frontend`, `auth-api`, `todos-api`, `users-api`, `log-message-processor`), la cola de eventos (`redis-queue`) y el componente de trazado distribuido (`zipkin`).
 
+Este documento describe ese archivo, pensado para desarrollo local con `build:` en cada servicio. Existe una segunda variante, `docker-compose.prod.yml`, que reemplaza cada `build:` por las imágenes ya publicadas en Docker Hub y es la que despliega Ansible sobre la VM de Azure; sus diferencias están documentadas en `docs/ANSIBLE.md` sección 3, no repetidas acá.
+
 ## 2. Diagrama de arquitectura de contenedores
 
 El diagrama de `/arch-img/Microservices.png` es la arquitectura *lógica* de la app (qué servicio le habla a cuál). Este otro es la vista de *despliegue*: contenedores, red de Docker, qué puerto queda publicado al host, y qué tan real es el `HEALTHCHECK` de cada uno (ver `docs/DOCKER.md` sección 3 para el detalle del patrón Health Endpoint Monitoring). Las flechas son las relaciones `depends_on` de `docker-compose.yml`, es decir, el orden real en el que Compose arranca los contenedores.

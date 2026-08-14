@@ -1,0 +1,63 @@
+---
+# Instala Docker Engine + el plugin docker compose desde el repositorio
+# oficial de Docker para Ubuntu, siguiendo los pasos documentados en
+# https://docs.docker.com/engine/install/ubuntu/ en vez del script de
+# conveniencia get.docker.com, que Docker mismo desaconseja para uso
+# repetible/productivo.
+
+- name: Actualizar cache de apt
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Instalar dependencias para agregar un repositorio apt por HTTPS
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+
+- name: Crear directorio para llaves de apt
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Descargar la llave GPG oficial de Docker
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Agregar el repositorio apt de Docker
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ ansible_architecture == 'x86_64' | ternary('amd64', 'arm64') }}
+      signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu
+      {{ ansible_distribution_release }} stable
+    state: present
+    filename: docker
+
+- name: Instalar Docker Engine, CLI y el plugin docker compose
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: true
+
+- name: Asegurar que el servicio docker este activo y habilitado
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Agregar el usuario remoto al grupo docker
+  ansible.builtin.user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: true

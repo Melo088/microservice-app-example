@@ -1,0 +1,12 @@
+---
+# Instala Docker y despliega el stack de docker-compose.prod.yml sobre la VM
+# que Terraform aprovisiono (ver ../terraform y docs/TERRAFORM.md). No crea
+# ni modifica infraestructura de Azure, solo actua dentro de la VM que ya
+# existe. Ver docs/ANSIBLE.md para el detalle de cada decision.
+
+- name: Instalar Docker y desplegar microservice-app-example
+  hosts: app_servers
+  become: true
+  roles:
+    - docker
+    - deploy
