@@ -30,12 +30,17 @@
     dest: /etc/apt/keyrings/docker.asc
     mode: "0644"
 
+- name: Detectar la arquitectura de paquetes Debian (amd64/arm64, no x86_64/aarch64)
+  ansible.builtin.command: dpkg --print-architecture
+  register: deb_architecture
+  changed_when: false
+
 - name: Agregar el repositorio apt de Docker
   ansible.builtin.apt_repository:
     repo: >-
-      deb [arch={{ ansible_architecture == 'x86_64' | ternary('amd64', 'arm64') }}
+      deb [arch={{ deb_architecture.stdout }}
       signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu
-      {{ ansible_distribution_release }} stable
+      {{ ansible_facts['distribution_release'] }} stable
     state: present
     filename: docker
 
