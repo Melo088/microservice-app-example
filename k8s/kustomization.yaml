@@ -1,0 +1,17 @@
+# Permite aplicar todo el directorio con un solo comando:
+#   kubectl apply -k k8s/
+# kustomize calcula el orden correcto por tipo de recurso (namespace antes
+# que lo que vive adentro de el), a diferencia de "kubectl apply -f k8s/"
+# sin -k, que no lo garantiza. El prefijo numerico en cada archivo es una
+# ayuda a la lectura, no algo de lo que dependa el orden real de aplicacion.
+resources:
+  - 00-namespace.yaml
+  - 01-configmap.yaml
+  - 02-secret.yaml
+  - 10-redis-queue.yaml
+  - 11-zipkin.yaml
+  - 20-auth-api.yaml
+  - 21-users-api.yaml
+  - 22-todos-api.yaml
+  - 23-frontend.yaml
+  - 24-log-message-processor.yaml

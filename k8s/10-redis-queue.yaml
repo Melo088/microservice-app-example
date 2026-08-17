@@ -1,0 +1,52 @@
+# Sin PersistentVolumeClaim a proposito: cumple el mismo rol que en
+# docker-compose.yml, un canal de pub/sub para el pipe de Pipes and Filters,
+# no una base de datos con estado que deba sobrevivir un reinicio.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-queue
+  namespace: microservice-app-example
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-queue
+  template:
+    metadata:
+      labels:
+        app: redis-queue
+    spec:
+      containers:
+        - name: redis-queue
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-queue
+  namespace: microservice-app-example
+spec:
+  selector:
+    app: redis-queue
+  ports:
+    - port: 6379
+      targetPort: 6379

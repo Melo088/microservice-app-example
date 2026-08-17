@@ -1,0 +1,85 @@
+# users-api no escribe datos propios (UsersController solo tiene rutas GET,
+# los usuarios se cargan una vez desde data.sql a una base H2 en memoria), asi
+# que a diferencia de todos-api, si seria seguro escalarlo con
+# "kubectl scale deployment users-api --replicas=3": cada pod arrancaria con
+# la misma data estatica, sin estado mutable que diverja entre copias.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: users-api
+  namespace: microservice-app-example
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: users-api
+  template:
+    metadata:
+      labels:
+        app: users-api
+    spec:
+      # uid 100, el usuario "app" real dentro de la imagen. Ver la nota en
+      # 20-auth-api.yaml sobre por que runAsUser es necesario ademas de
+      # runAsNonRoot.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+      containers:
+        - name: users-api
+          image: melo15036/microservice-app-example-users-api:latest
+          ports:
+            - containerPort: 8083
+          env:
+            - name: SERVER_PORT
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: SERVER_PORT }
+            - name: SPRING_ZIPKIN_BASE_URL
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: SPRING_ZIPKIN_BASE_URL }
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: app-secrets, key: JWT_SECRET }
+          # GET /health, agregado en el patron Health Endpoint Monitoring
+          # (docs/DOCKER.md seccion 3), sin autenticacion.
+          #
+          # startupProbe primero: Spring Boot 1.5.6 tarda bastante en levantar
+          # (medido en la practica, mas de 25s solo para inicializar el
+          # contexto de Spring, antes de que el puerto este escuchando).
+          # Mientras el startupProbe no de un OK, livenessProbe queda inactivo,
+          # asi que un arranque lento no se confunde con un proceso colgado y
+          # no se reinicia el contenedor a mitad de su propio arranque.
+          startupProbe:
+            httpGet: { path: /health, port: 8083 }
+            periodSeconds: 5
+            failureThreshold: 24 # hasta 120s para el primer arranque
+          readinessProbe:
+            httpGet: { path: /health, port: 8083 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 8083 }
+            periodSeconds: 15
+          # limits mas generosos que el resto de los servicios, medidos en
+          # la practica, no adivinados. Una JVM de Java 8 corriendo Spring
+          # Boot 1.5.6 (Hibernate, Spring Security, Spring Cloud Sleuth) es
+          # intensiva en CPU durante el arranque, y con 500m de limite de
+          # CPU nunca llegaba a abrir el puerto a tiempo. Con la CPU resuelta,
+          # todavia moria por OOMKilled con 512Mi de memoria: "docker stats"
+          # contra la imagen real mostro un pico de ~925MiB al arrancar y un
+          # estable de ~917MiB, sin ningun limite impuesto (asi corrio
+          # siempre en Docker Compose, donde nunca hubo este problema porque
+          # nunca hubo un limite de memoria que lo expusiera).
+          resources:
+            requests: { cpu: 250m, memory: 768Mi }
+            limits: { cpu: 1000m, memory: 1280Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: users-api
+  namespace: microservice-app-example
+spec:
+  selector:
+    app: users-api
+  ports:
+    - port: 8083
+      targetPort: 8083

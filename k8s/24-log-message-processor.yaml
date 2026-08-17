@@ -1,0 +1,76 @@
+# Sin Service ni puerto: no es un servidor HTTP, es un consumidor de Redis
+# (ver docs/DOCKER.md seccion 2). Por la misma razon, sin probes: no hay una
+# ruta HTTP que consultar, y agregar una solo para satisfacer un probe seria
+# codigo de mas sin un beneficio real (mismo criterio que ya se documento
+# para el HEALTHCHECK de Docker de este servicio).
+#
+# El PersistentVolumeClaim cumple el mismo rol que el volumen "log-data" de
+# docker-compose.yml: el filtro persist (docs/DOCKER.md seccion 5) escribe
+# ahi, y debe sobrevivir a que el pod se reinicie.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: log-data
+  namespace: microservice-app-example
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: log-message-processor
+  namespace: microservice-app-example
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: log-message-processor
+  template:
+    metadata:
+      labels:
+        app: log-message-processor
+    spec:
+      # uid 1000, el usuario "app" real dentro de la imagen. Ver la nota en
+      # 20-auth-api.yaml sobre por que runAsUser es necesario ademas de
+      # runAsNonRoot.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: log-message-processor
+          image: melo15036/microservice-app-example-log-message-processor:latest
+          env:
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: REDIS_HOST }
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: REDIS_PORT }
+            - name: REDIS_CHANNEL
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: REDIS_CHANNEL }
+            - name: ZIPKIN_URL
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: ZIPKIN_URL_V1 }
+            - name: LOG_PERSIST_PATH
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: LOG_PERSIST_PATH }
+            - name: SENDGRID_API_KEY
+              valueFrom:
+                secretKeyRef: { name: app-secrets, key: SENDGRID_API_KEY }
+            - name: SENDGRID_TO
+              valueFrom:
+                secretKeyRef: { name: app-secrets, key: SENDGRID_TO }
+          volumeMounts:
+            - name: log-data
+              mountPath: /data
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 200m, memory: 256Mi }
+      volumes:
+        - name: log-data
+          persistentVolumeClaim:
+            claimName: log-data

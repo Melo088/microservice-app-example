@@ -1,0 +1,31 @@
+# Variables no sensibles, compartidas entre los manifiestos de servicio.
+# Los mismos nombres y valores que ya usa docker-compose.yml: las direcciones
+# internas apuntan al nombre del Service de Kubernetes, que resuelve por DNS
+# igual que el nombre del servicio resuelve en la red de Docker Compose.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: microservice-app-example
+data:
+  AUTH_API_PORT: "8081"
+  TODO_API_PORT: "8082"
+  SERVER_PORT: "8083"
+  PORT: "8080"
+
+  REDIS_HOST: "redis-queue"
+  REDIS_PORT: "6379"
+  REDIS_CHANNEL: "log_channel"
+
+  AUTH_API_ADDRESS: "http://auth-api:8081"
+  TODOS_API_ADDRESS: "http://todos-api:8082"
+  USERS_API_ADDRESS: "http://users-api:8083"
+
+  # log-message-processor envia trazas codificadas en Thrift al endpoint v1
+  # de Zipkin; los demas servicios usan clientes que codifican en JSON,
+  # endpoint v2. Ver docs/COMPOSE.md seccion 4 para el detalle.
+  ZIPKIN_URL_V1: "http://zipkin:9411/api/v1/spans"
+  ZIPKIN_URL_V2: "http://zipkin:9411/api/v2/spans"
+  SPRING_ZIPKIN_BASE_URL: "http://zipkin:9411"
+
+  LOG_PERSIST_PATH: "/data/processed.log"

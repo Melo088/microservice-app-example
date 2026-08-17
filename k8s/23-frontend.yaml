@@ -1,0 +1,67 @@
+# NodePort: es uno de los dos componentes pensados para consultarse desde
+# afuera del clúster, junto con zipkin (ver 11-zipkin.yaml). auth-api,
+# todos-api y users-api solo llevan ClusterIP, alcanzables entre pods.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: microservice-app-example
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      # uid 1000, el usuario "node" real dentro de la imagen. Ver la nota en
+      # 20-auth-api.yaml sobre por que runAsUser es necesario ademas de
+      # runAsNonRoot.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: frontend
+          image: melo15036/microservice-app-example-frontend:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: PORT }
+            - name: AUTH_API_ADDRESS
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: AUTH_API_ADDRESS }
+            - name: TODOS_API_ADDRESS
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: TODOS_API_ADDRESS }
+            - name: ZIPKIN_URL
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: ZIPKIN_URL_V2 }
+          readinessProbe:
+            httpGet: { path: /, port: 8080 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: 8080 }
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: microservice-app-example
+spec:
+  type: NodePort
+  selector:
+    app: frontend
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080
