@@ -1,0 +1,44 @@
+# NodePort porque, igual que en el grupo de seguridad de red de Terraform y
+# en docker-compose.prod.yml, Zipkin es uno de los dos componentes pensados
+# para consultarse desde afuera del clúster (el otro es frontend).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zipkin
+  namespace: microservice-app-example
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zipkin
+  template:
+    metadata:
+      labels:
+        app: zipkin
+    spec:
+      containers:
+        - name: zipkin
+          image: openzipkin/zipkin:2
+          ports:
+            - containerPort: 9411
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zipkin
+  namespace: microservice-app-example
+spec:
+  type: NodePort
+  selector:
+    app: zipkin
+  ports:
+    - port: 9411
+      targetPort: 9411
+      nodePort: 30411

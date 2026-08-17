@@ -12,3 +12,6 @@ terraform/tfplan*
 # Ansible
 ansible/inventory.ini
 ansible/*.retry
+
+# Kubernetes
+k8s/02-secret.yaml

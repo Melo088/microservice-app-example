@@ -1,0 +1,77 @@
+# replicas: 1 a proposito, no un descuido. Los todos se guardan en un
+# memory-cache dentro del proceso (todoController.js), no en Redis ni en
+# ninguna base compartida. Si esto se escalara a mas de un pod, cada uno
+# tendria su propia copia de los todos y el Service repartiria el trafico
+# entre ellas, mostrando datos distintos segun que pod responda. Escalarlo
+# de verdad requeriria primero mover ese estado a un almacenamiento
+# compartido, no es algo que se resuelva desde el manifiesto.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todos-api
+  namespace: microservice-app-example
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: todos-api
+  template:
+    metadata:
+      labels:
+        app: todos-api
+    spec:
+      # uid 1000, el usuario "node" real dentro de la imagen. Ver la nota en
+      # 20-auth-api.yaml sobre por que runAsUser es necesario ademas de
+      # runAsNonRoot.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: todos-api
+          image: melo15036/microservice-app-example-todos-api:latest
+          ports:
+            - containerPort: 8082
+          env:
+            - name: TODO_API_PORT
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: TODO_API_PORT }
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: REDIS_HOST }
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: REDIS_PORT }
+            - name: REDIS_CHANNEL
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: REDIS_CHANNEL }
+            - name: ZIPKIN_URL
+              valueFrom:
+                configMapKeyRef: { name: app-config, key: ZIPKIN_URL_V2 }
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: app-secrets, key: JWT_SECRET }
+          # GET /health, agregado en el patron Health Endpoint Monitoring
+          # (docs/DOCKER.md seccion 3), sin autenticacion.
+          readinessProbe:
+            httpGet: { path: /health, port: 8082 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 8082 }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 200m, memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: todos-api
+  namespace: microservice-app-example
+spec:
+  selector:
+    app: todos-api
+  ports:
+    - port: 8082
+      targetPort: 8082

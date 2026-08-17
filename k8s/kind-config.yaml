@@ -1,0 +1,13 @@
+# Config para "kind create cluster --config k8s/kind-config.yaml", usada solo
+# para pruebas locales (ver docs/KUBERNETES.md). Sin esto, los NodePort de
+# frontend (30080) y zipkin (30411) solo serian alcanzables dentro del
+# contenedor que kind usa como nodo, no desde la maquina host.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 30080
+      - containerPort: 30411
+        hostPort: 30411
